@@ -57,6 +57,11 @@ enabled = false
 > [!NOTE]
 > `name` must be set to `"OpenAI"`.
 
+> [!IMPORTANT]
+> `env_key` tells Codex to send `GITHUB_COPILOT_API_KEY` as the gateway API key, so export it before starting Codex: use one of the [gateway API keys](cli.md#auth-command-options), or any non-empty placeholder when none are configured. If it is unset, Codex fails with a `Missing environment variable` error even when the gateway does not require a key (verified with Codex `0.159.2`).
+>
+> Desktop apps launched from the macOS Dock or Finder do not load shell profiles. For them, replace `env_key` with `experimental_bearer_token = "<gateway API key or placeholder>"`; this stores the value in plain text in `config.toml`.
+
 ### Auto Review Model Mapping
 
 When using `approvals_reviewer = "auto_review"` through the top-level GitHub Copilot route, add this mapping to the gateway's `config.json`:

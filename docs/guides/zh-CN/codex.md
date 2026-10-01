@@ -59,6 +59,11 @@ enabled = false
 > [!NOTE]
 > `name` 一定要配置为 `"OpenAI"`。
 
+> [!IMPORTANT]
+> `env_key` 会让 Codex 把 `GITHUB_COPILOT_API_KEY` 作为网关 API Key 发送，因此启动 Codex 前需设置该变量：填写任一[网关 API Key](cli.md#auth-命令选项)；未配置 Key 时，填写任意非空占位值即可。若未设置，即使网关无需 Key，Codex 也会报 `Missing environment variable` 错误（已在 Codex `0.159.2` 验证）。
+>
+> 从 macOS 程序坞或访达启动的桌面应用不会加载 shell 配置文件。此时可将 `env_key` 替换为 `experimental_bearer_token = "<网关 API Key 或占位值>"`，该值会以明文保存在 `config.toml` 中。
+
 ### 自动审核模型映射
 
 通过顶层 GitHub Copilot 路由使用 `approvals_reviewer = "auto_review"` 时，在网关 `config.json` 中加入以下映射：
