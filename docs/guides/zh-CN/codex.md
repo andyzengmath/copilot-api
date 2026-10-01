@@ -60,9 +60,21 @@ enabled = false
 > `name` 一定要配置为 `"OpenAI"`。
 
 > [!IMPORTANT]
-> `env_key` 会让 Codex 把 `GITHUB_COPILOT_API_KEY` 作为网关 API Key 发送，因此启动 Codex 前需设置该变量：填写任一[网关 API Key](cli.md#auth-命令选项)；未配置 Key 时，填写任意非空占位值即可。若未设置，即使网关无需 Key，Codex 也会报 `Missing environment variable` 错误（已在 Codex `0.159.2` 验证）。
->
-> 从 macOS 程序坞或访达启动的桌面应用不会加载 shell 配置文件。此时可将 `env_key` 替换为 `experimental_bearer_token = "<网关 API Key 或占位值>"`，该值会以明文保存在 `config.toml` 中。
+> `env_key` 会让 Codex 把 `GITHUB_COPILOT_API_KEY` 作为网关 API Key 发送，因此启动 Codex 前需设置该变量：填写任一[网关 API Key](cli.md#auth-命令选项)；未配置 Key 时，填写任意非空占位值即可。若未设置，即使网关无需 Key，Codex 也会报 `Missing environment variable` 错误（已在 Codex `0.159.2` 验证）。使用桌面应用时，见 [Codex 桌面应用](#codex-桌面应用)。
+
+### Codex 桌面应用
+
+Codex 桌面应用（包括 ChatGPT 应用中的 Codex）需要对 `[model_providers.copilot_api]` 做两处修改：
+
+```toml
+[model_providers.copilot_api]
+# 替代 env_key：从 macOS 程序坞或访达启动的应用不会加载 shell 配置文件。
+experimental_bearer_token = "<网关 API Key 或占位值>"
+# 否则应用会套用 ChatGPT 套餐的 Codex 用量限制，额度用完后即使请求走网关也会停止发送。
+requires_openai_auth = false
+```
+
+`experimental_bearer_token` 会以明文保存在 `config.toml` 中。修改后请完全退出并重新打开应用。
 
 ### 自动审核模型映射
 

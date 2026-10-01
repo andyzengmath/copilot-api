@@ -58,9 +58,22 @@ enabled = false
 > `name` must be set to `"OpenAI"`.
 
 > [!IMPORTANT]
-> `env_key` tells Codex to send `GITHUB_COPILOT_API_KEY` as the gateway API key, so export it before starting Codex: use one of the [gateway API keys](cli.md#auth-command-options), or any non-empty placeholder when none are configured. If it is unset, Codex fails with a `Missing environment variable` error even when the gateway does not require a key (verified with Codex `0.159.2`).
->
-> Desktop apps launched from the macOS Dock or Finder do not load shell profiles. For them, replace `env_key` with `experimental_bearer_token = "<gateway API key or placeholder>"`; this stores the value in plain text in `config.toml`.
+> `env_key` tells Codex to send `GITHUB_COPILOT_API_KEY` as the gateway API key, so export it before starting Codex: use one of the [gateway API keys](cli.md#auth-command-options), or any non-empty placeholder when none are configured. If it is unset, Codex fails with a `Missing environment variable` error even when the gateway does not require a key (verified with Codex `0.159.2`). For the desktop app, see [Codex Desktop App](#codex-desktop-app).
+
+### Codex Desktop App
+
+The Codex desktop app, including Codex in the ChatGPT app, needs two changes to `[model_providers.copilot_api]`:
+
+```toml
+[model_providers.copilot_api]
+# Replaces env_key: apps launched from the macOS Dock or Finder do not load shell profiles.
+experimental_bearer_token = "<gateway API key or placeholder>"
+# Otherwise the app applies your ChatGPT plan's Codex usage limits and stops
+# sending once they run out, even though requests go to the gateway.
+requires_openai_auth = false
+```
+
+`experimental_bearer_token` stores the value in plain text in `config.toml`. Fully quit and reopen the app after editing.
 
 ### Auto Review Model Mapping
 
