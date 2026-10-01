@@ -64,7 +64,7 @@ enabled = false
 
 ### Codex 桌面应用
 
-Codex 桌面应用（包括 ChatGPT 应用中的 Codex）需要对 `[model_providers.copilot_api]` 做两处修改：
+Codex 桌面应用（包括 ChatGPT 应用中的 Codex）需要对 `[model_providers.copilot_api]` 做两处修改（已在 ChatGPT 应用内置的 Codex `0.159.2` 验证）：
 
 ```toml
 [model_providers.copilot_api]

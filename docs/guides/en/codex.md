@@ -62,7 +62,7 @@ enabled = false
 
 ### Codex Desktop App
 
-The Codex desktop app, including Codex in the ChatGPT app, needs two changes to `[model_providers.copilot_api]`:
+The Codex desktop app, including Codex in the ChatGPT app, needs two changes to `[model_providers.copilot_api]` (verified with Codex `0.159.2` in the ChatGPT app):
 
 ```toml
 [model_providers.copilot_api]
