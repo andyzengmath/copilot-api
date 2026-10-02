@@ -66,6 +66,9 @@ enabled = false
 >
 > `GITHUB_COPILOT_API_KEY` 需设置为系统级用户环境变量，以便 Codex 应用也能读取。填写任一[网关 API Key](cli.md#auth-命令选项)；未配置 Key 时，填写任意非空占位值即可。未设置时，Codex 会报 `Missing environment variable` 错误。
 
+> [!TIP]
+> Codex 应用的推理强度滑块会跳过 Max（[openai/codex#31968](https://github.com/openai/codex/issues/31968)）：Extra High 之后直接是 Ultra，即最大推理强度加自动任务委派（子代理）。如需在应用中使用 Max，请在 **Settings → General → Model features → Available reasoning efforts** 中启用，然后在推理强度下拉菜单中选择。
+
 ### 自动审核模型映射
 
 通过顶层 GitHub Copilot 路由使用 `approvals_reviewer = "auto_review"` 时，在网关 `config.json` 中加入以下映射：
