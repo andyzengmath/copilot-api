@@ -24,6 +24,7 @@ import {
   clearToken,
   getCopilotAccountType,
 } from './auth'
+import { createDeviceFlowStarter } from './device-flow'
 import { tMain } from './i18n'
 import {
   configureProviderWithAuthStatus,
@@ -192,37 +193,39 @@ export function registerIpcHandlers(
 ): void {
   ipcMain.handle('auth:get-status', async () => getDesktopAuthStatus())
 
-  // Auth: Start the OAuth device flow
-  ipcMain.handle('auth:get-device-code', async () => {
-    const deviceCode = await getDeviceCode()
-    // Poll in the background and notify the renderer when the token arrives
-    pollAccessToken(deviceCode)
-      .then(async (token) => {
-        await saveToken(token)
-        const [, accountType] = await Promise.all([
-          getGitHubUser(token),
-          getCopilotAccountType(token),
-        ])
-        // Detect and persist the account type automatically after sign-in
-        const settings = await readSettings()
-        await writeSettings({ ...settings, accountType })
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('auth:success', {
-            success: true,
-            mode: 'copilot',
-          })
-        }
-      })
-      .catch((err: Error) => {
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('auth:success', {
-            success: false,
-            error: err.message,
-          })
-        }
-      })
-    return deviceCode
+  // Auth: Start the OAuth device flow. The token is polled in the background
+  // and the renderer is notified when it arrives; starting a new flow aborts
+  // the previous poll so a superseded flow cannot report a late failure.
+  const startDeviceFlow = createDeviceFlowStarter({
+    getDeviceCode,
+    pollAccessToken: (deviceCode, signal) =>
+      pollAccessToken(deviceCode, undefined, { signal }),
+    onToken: async (token) => {
+      await saveToken(token)
+      const [, accountType] = await Promise.all([
+        getGitHubUser(token),
+        getCopilotAccountType(token),
+      ])
+      // Detect and persist the account type automatically after sign-in
+      const settings = await readSettings()
+      await writeSettings({ ...settings, accountType })
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('auth:success', {
+          success: true,
+          mode: 'copilot',
+        })
+      }
+    },
+    onError: (err) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('auth:success', {
+          success: false,
+          error: err.message,
+        })
+      }
+    },
   })
+  ipcMain.handle('auth:get-device-code', () => startDeviceFlow())
 
   // Auth: Save token directly
   ipcMain.handle('auth:save-token', async (_event, token: string) => {
