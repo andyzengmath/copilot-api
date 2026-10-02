@@ -12,8 +12,8 @@ export interface DeviceFlowDependencies {
 
 /**
  * Starts GitHub device flows for the sign-in page, one at a time. Starting a
- * new flow aborts the previous poll, so a superseded flow can no longer report
- * a late failure (for example its code expiring) while a newer one is pending.
+ * new request supersedes pending device-code requests and token polls, so
+ * only the current flow can return a code or begin handling a token.
  */
 export function createDeviceFlowStarter(
   dependencies: DeviceFlowDependencies,
@@ -21,24 +21,35 @@ export function createDeviceFlowStarter(
   let active: AbortController | undefined
 
   return async () => {
-    const deviceCode = await dependencies.getDeviceCode()
     active?.abort()
     const controller = new AbortController()
     active = controller
 
-    void dependencies
-      .pollAccessToken(deviceCode, controller.signal)
-      .then((token) => dependencies.onToken(token))
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return
-        dependencies.onError(
-          error instanceof Error ? error : new Error(String(error)),
-        )
-      })
-      .finally(() => {
-        if (active === controller) active = undefined
-      })
+    try {
+      const deviceCode = await dependencies.getDeviceCode()
+      controller.signal.throwIfAborted()
 
-    return deviceCode
+      void dependencies
+        .pollAccessToken(deviceCode, controller.signal)
+        .then((token) => {
+          controller.signal.throwIfAborted()
+          return dependencies.onToken(token)
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return
+          dependencies.onError(
+            error instanceof Error ? error : new Error(String(error)),
+          )
+        })
+        .finally(() => {
+          if (active === controller) active = undefined
+        })
+
+      return deviceCode
+    } catch (error) {
+      if (active === controller) active = undefined
+      controller.signal.throwIfAborted()
+      throw error
+    }
   }
 }
