@@ -30,7 +30,7 @@
   "scripts": {
     "build": "tsdown",
     "build:desktop": "tsdown --config tsdown.desktop.config.ts",
-    "dev": "NODE_USE_SYSTEM_CA=1 bun run --watch ./src/main.ts",
+    "dev": "NODE_USE_SYSTEM_CA=1 bun run --watch ./src/main.ts start",
     "knip": "knip-bun",
     "lint": "eslint --cache",
     "lint:all": "bun run lint && bun run --cwd desktop lint",
@@ -38,7 +38,7 @@
     "prepack": "bun run build",
     "prepare": "simple-git-hooks",
     "release": "bumpp && bun publish --access public",
-    "start": "NODE_USE_SYSTEM_CA=1 NODE_ENV=production bun run ./src/main.ts",
+    "start": "NODE_USE_SYSTEM_CA=1 NODE_ENV=production bun run ./src/main.ts start",
     "typecheck": "tsc",
     "typecheck:all": "bun run typecheck && bun run --cwd desktop typecheck",
     "typecheck:desktop": "bun run --cwd desktop typecheck"

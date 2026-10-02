@@ -60,16 +60,16 @@ bun install
 ### 开发模式
 
 ```sh
-bun run dev start
+bun run dev
 ```
 
 ### 生产模式
 
 ```sh
-bun run start start
+bun run start
 ```
 
-> 结尾的 `start` 是传给 `src/main.ts` 的 CLI 子命令，不是笔误：`bun run dev start` 是 watch 模式，`bun run start start` 是生产模式。
+> 两个脚本都会自动选择 `start` CLI 子命令，可直接传入服务参数，例如 `bun run start --port 8080`。运行其他子命令时，请使用 `bun run src/main.ts auth` 或 `bun run src/main.ts debug`。
 
 <a id="using-with-npx"></a>
 
