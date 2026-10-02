@@ -24,7 +24,10 @@ import {
   clearToken,
   getCopilotAccountType,
 } from './auth'
-import { createDeviceFlowStarter } from './device-flow'
+import {
+  createDeviceFlowStarter,
+  createDeviceFlowTokenHandler,
+} from './device-flow'
 import { tMain } from './i18n'
 import {
   configureProviderWithAuthStatus,
@@ -195,27 +198,26 @@ export function registerIpcHandlers(
 
   // Auth: Start the OAuth device flow. The token is polled in the background
   // and the renderer is notified when it arrives; starting a new flow aborts
-  // the previous poll so a superseded flow cannot report a late failure.
+  // polling and finalization so a superseded flow cannot report a late result.
   const startDeviceFlow = createDeviceFlowStarter({
     getDeviceCode,
     pollAccessToken: (deviceCode, signal) =>
       pollAccessToken(deviceCode, undefined, { signal }),
-    onToken: async (token) => {
-      await saveToken(token)
-      const [, accountType] = await Promise.all([
-        getGitHubUser(token),
-        getCopilotAccountType(token),
-      ])
-      // Detect and persist the account type automatically after sign-in
-      const settings = await readSettings()
-      await writeSettings({ ...settings, accountType })
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('auth:success', {
-          success: true,
-          mode: 'copilot',
-        })
-      }
-    },
+    onToken: createDeviceFlowTokenHandler({
+      getGitHubUser,
+      getCopilotAccountType,
+      readSettings,
+      saveToken,
+      writeSettings,
+      onSuccess: () => {
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('auth:success', {
+            success: true,
+            mode: 'copilot',
+          })
+        }
+      },
+    }),
     onError: (err) => {
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send('auth:success', {

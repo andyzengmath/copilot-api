@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 
 import type { DeviceCodeResponse } from '../../src/services/github/get-device-code'
-import { createDeviceFlowStarter } from '../electron/device-flow'
+import {
+  createDeviceFlowStarter,
+  createDeviceFlowTokenHandler,
+  type DeviceFlowDependencies,
+  type DeviceFlowTokenDependencies,
+} from '../electron/device-flow'
+import { normalizeSettings } from '../electron/settings-store'
+import type { DesktopSettings } from '../src/types/ipc'
 
 const createDeviceCode = (code: string): DeviceCodeResponse => ({
   device_code: `device-${code}`,
@@ -18,7 +25,12 @@ interface PendingPoll {
   reject: (error: Error) => void
 }
 
-function createHarness(getDeviceCode?: () => Promise<DeviceCodeResponse>) {
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+function createHarness(
+  getDeviceCode?: () => Promise<DeviceCodeResponse>,
+  onToken?: DeviceFlowDependencies['onToken'],
+) {
   const polls: PendingPoll[] = []
   const tokens: string[] = []
   const errors: string[] = []
@@ -34,16 +46,65 @@ function createHarness(getDeviceCode?: () => Promise<DeviceCodeResponse>) {
           once: true,
         })
       }),
-    onToken: (token) => {
-      tokens.push(token)
-      return Promise.resolve()
-    },
+    onToken:
+      onToken
+      ?? ((token) => {
+        tokens.push(token)
+        return Promise.resolve()
+      }),
     onError: (error) => {
       errors.push(error.message)
     },
   })
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
   return { errors, polls, settle, start, tokens }
+}
+
+function createTokenHandlerHarness() {
+  const state: {
+    token: string | null
+    settings: DesktopSettings
+    successes: number
+  } = {
+    token: 'previous-token',
+    settings: normalizeSettings({ verbose: true }),
+    successes: 0,
+  }
+  const events: string[] = []
+  const dependencies: DeviceFlowTokenDependencies = {
+    getGitHubUser: () => {
+      events.push('verify-user')
+      return Promise.resolve('test-user')
+    },
+    getCopilotAccountType: () => {
+      events.push('verify-account-type')
+      return Promise.resolve('enterprise')
+    },
+    readSettings: () => {
+      events.push('read-settings')
+      return Promise.resolve(state.settings)
+    },
+    saveToken: (token) => {
+      events.push('save-token')
+      state.token = token
+      return Promise.resolve()
+    },
+    writeSettings: (settings) => {
+      events.push('write-settings')
+      state.settings = settings
+      return Promise.resolve()
+    },
+    onSuccess: () => {
+      events.push('success')
+      state.successes++
+    },
+  }
+
+  return {
+    dependencies,
+    events,
+    onToken: createDeviceFlowTokenHandler(dependencies),
+    state,
+  }
 }
 
 describe('createDeviceFlowStarter', () => {
@@ -56,6 +117,51 @@ describe('createDeviceFlowStarter', () => {
 
     expect(deviceCode.user_code).toBe('CODE-1')
     expect(tokens).toEqual(['gho_token'])
+    expect(errors).toEqual([])
+  })
+
+  test('passes the flow cancellation signal to token handling', async () => {
+    let handledSignal: AbortSignal | undefined
+    const { polls, settle, start } = createHarness(
+      undefined,
+      (_token, signal) => {
+        handledSignal = signal
+        return Promise.resolve()
+      },
+    )
+
+    await start()
+    polls[0]?.resolve('gho_token')
+    await settle()
+
+    expect(handledSignal).toBe(polls[0]?.signal)
+  })
+
+  test('cancels token handling that has already started', async () => {
+    const started = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    let handledSignal: AbortSignal | undefined
+    let reportedSuccess = false
+    const { polls, settle, start, errors } = createHarness(
+      undefined,
+      async (_token, signal) => {
+        handledSignal = signal
+        started.resolve()
+        await resume.promise
+        handledSignal?.throwIfAborted()
+        reportedSuccess = true
+      },
+    )
+
+    await start()
+    polls[0]?.resolve('gho_token')
+    await started.promise
+    await start()
+    resume.resolve()
+    await settle()
+
+    expect(reportedSuccess).toBe(false)
+    expect(polls[1]?.signal.aborted).toBe(false)
     expect(errors).toEqual([])
   })
 
@@ -237,5 +343,230 @@ describe('createDeviceFlowStarter', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(errors).toEqual(['save failed'])
+  })
+})
+
+describe('createDeviceFlowTokenHandler', () => {
+  test('validates before saving and preserves unrelated settings', async () => {
+    const { events, onToken, state } = createTokenHandlerHarness()
+
+    await onToken('current-token', new AbortController().signal)
+
+    expect(events).toEqual([
+      'verify-user',
+      'verify-account-type',
+      'read-settings',
+      'save-token',
+      'write-settings',
+      'success',
+    ])
+    expect(state.token).toBe('current-token')
+    expect(state.settings.accountType).toBe('enterprise')
+    expect(state.settings.verbose).toBe(true)
+    expect(state.successes).toBe(1)
+  })
+
+  test('does no work when already cancelled', async () => {
+    const { events, onToken, state } = createTokenHandlerHarness()
+    const controller = new AbortController()
+    controller.abort()
+
+    const result = await onToken('cancelled-token', controller.signal).catch(
+      (error: unknown) => error,
+    )
+
+    expect(result).toMatchObject({ name: 'AbortError' })
+    expect(events).toEqual([])
+    expect(state.token).toBe('previous-token')
+    expect(state.successes).toBe(0)
+  })
+
+  test('preserves the existing login when verification fails', async () => {
+    const { dependencies, onToken, state, events } = createTokenHandlerHarness()
+    const failure = new Error('verification failed')
+    dependencies.getGitHubUser = () => Promise.reject(failure)
+
+    const result = await onToken(
+      'invalid-token',
+      new AbortController().signal,
+    ).catch((error: unknown) => error)
+
+    expect(result).toBe(failure)
+    expect(events).not.toContain('save-token')
+    expect(state.token).toBe('previous-token')
+    expect(state.successes).toBe(0)
+  })
+
+  test('keeps the newer login when verification of a superseded flow finishes late', async () => {
+    const { dependencies, onToken, state } = createTokenHandlerHarness()
+    const oldUser = Promise.withResolvers<string>()
+    dependencies.getGitHubUser = (token) =>
+      token === 'old-token' ? oldUser.promise : Promise.resolve('new-user')
+    const { polls, start, errors } = createHarness(undefined, onToken)
+
+    await start()
+    polls[0]?.resolve('old-token')
+    await settle()
+    await start()
+    polls[1]?.resolve('new-token')
+    await settle()
+
+    expect(state.token).toBe('new-token')
+    expect(state.successes).toBe(1)
+
+    oldUser.resolve('old-user')
+    await settle()
+
+    expect(state.token).toBe('new-token')
+    expect(state.successes).toBe(1)
+    expect(errors).toEqual([])
+  })
+
+  test('checks cancellation after waiting for another persistence operation', async () => {
+    const { dependencies, onToken, state } = createTokenHandlerHarness()
+    const reading = Promise.withResolvers<void>()
+    const settings = Promise.withResolvers<DesktopSettings>()
+    let reads = 0
+    dependencies.readSettings = () => {
+      reads++
+      if (reads === 1) {
+        reading.resolve()
+        return settings.promise
+      }
+      return Promise.resolve(state.settings)
+    }
+    const first = onToken('first-token', new AbortController().signal)
+    await reading.promise
+
+    const controller = new AbortController()
+    const queued = onToken('cancelled-token', controller.signal).catch(
+      (error: unknown) => error,
+    )
+    await settle()
+    controller.abort()
+    settings.resolve(state.settings)
+    await first
+
+    expect(await queued).toMatchObject({ name: 'AbortError' })
+    expect(reads).toBe(1)
+    expect(state.token).toBe('first-token')
+    expect(state.successes).toBe(1)
+  })
+
+  test('checks cancellation after reading settings', async () => {
+    const { dependencies, onToken, state, events } = createTokenHandlerHarness()
+    const reading = Promise.withResolvers<void>()
+    const settings = Promise.withResolvers<DesktopSettings>()
+    dependencies.readSettings = () => {
+      reading.resolve()
+      return settings.promise
+    }
+    const controller = new AbortController()
+    const result = onToken('cancelled-token', controller.signal).catch(
+      (error: unknown) => error,
+    )
+    await reading.promise
+    controller.abort()
+    settings.resolve(state.settings)
+
+    expect(await result).toMatchObject({ name: 'AbortError' })
+    expect(events).not.toContain('save-token')
+    expect(state.token).toBe('previous-token')
+    expect(state.successes).toBe(0)
+  })
+
+  test('serializes an in-flight superseded token write before newer credentials', async () => {
+    const { dependencies, onToken, state } = createTokenHandlerHarness()
+    const writing = Promise.withResolvers<void>()
+    const finishWrite = Promise.withResolvers<void>()
+    const writes: string[] = []
+    dependencies.saveToken = async (token) => {
+      writes.push(`start-${token}`)
+      if (token === 'old-token') {
+        writing.resolve()
+        await finishWrite.promise
+      }
+      state.token = token
+      writes.push(`finish-${token}`)
+    }
+    const controller = new AbortController()
+    const oldResult = onToken('old-token', controller.signal).catch(
+      (error: unknown) => error,
+    )
+    await writing.promise
+    controller.abort()
+    const current = onToken('new-token', new AbortController().signal)
+    await settle()
+
+    expect(writes).toEqual(['start-old-token'])
+    expect(state.successes).toBe(0)
+
+    finishWrite.resolve()
+    await current
+
+    expect(await oldResult).toMatchObject({ name: 'AbortError' })
+    expect(writes).toEqual([
+      'start-old-token',
+      'finish-old-token',
+      'start-new-token',
+      'finish-new-token',
+    ])
+    expect(state.token).toBe('new-token')
+    expect(state.settings.accountType).toBe('enterprise')
+    expect(state.successes).toBe(1)
+  })
+
+  test('serializes an in-flight settings write and suppresses its stale success', async () => {
+    const { dependencies, onToken, state } = createTokenHandlerHarness()
+    const writing = Promise.withResolvers<void>()
+    const finishWrite = Promise.withResolvers<void>()
+    const writes: string[] = []
+    dependencies.getCopilotAccountType = (token) =>
+      Promise.resolve(token === 'old-token' ? 'business' : 'enterprise')
+    dependencies.writeSettings = async (settings) => {
+      writes.push(settings.accountType)
+      if (settings.accountType === 'business') {
+        writing.resolve()
+        await finishWrite.promise
+      }
+      state.settings = settings
+    }
+    const controller = new AbortController()
+    const oldResult = onToken('old-token', controller.signal).catch(
+      (error: unknown) => error,
+    )
+    await writing.promise
+    controller.abort()
+    const current = onToken('new-token', new AbortController().signal)
+    await settle()
+
+    expect(writes).toEqual(['business'])
+    expect(state.successes).toBe(0)
+
+    finishWrite.resolve()
+    await current
+
+    expect(await oldResult).toMatchObject({ name: 'AbortError' })
+    expect(writes).toEqual(['business', 'enterprise'])
+    expect(state.token).toBe('new-token')
+    expect(state.settings.accountType).toBe('enterprise')
+    expect(state.successes).toBe(1)
+  })
+
+  test('releases the persistence queue after a write fails', async () => {
+    const { dependencies, onToken, state } = createTokenHandlerHarness()
+    const saveToken = dependencies.saveToken
+    const failure = new Error('token write failed')
+    dependencies.saveToken = (token) =>
+      token === 'failed-token' ? Promise.reject(failure) : saveToken(token)
+    const failed = onToken('failed-token', new AbortController().signal).catch(
+      (error: unknown) => error,
+    )
+    const current = onToken('current-token', new AbortController().signal)
+    await current
+
+    expect(await failed).toBe(failure)
+    expect(state.token).toBe('current-token')
+    expect(state.successes).toBe(1)
   })
 })
