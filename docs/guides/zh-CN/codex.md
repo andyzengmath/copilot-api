@@ -8,7 +8,9 @@
 
 这个 AI gateway 也可以为 Codex 提供后端能力。
 
-推荐使用 Codex `0.155.1` 版本。
+推荐使用 Codex `0.160.0` 或更高版本：这些客户端会从 `model_catalog_url` 加载模型目录，因此本地 `model_catalog_json` 文件是可选的。
+
+远程目录响应限制为 1 MiB JSON。合并后的目录超出该限制时，网关会优先保留通过 provider `codexModels` 选中的模型，其余模型会被丢弃。请在 Provider 管理页选择需要的模型；如果需要完整列表，则生成本地目录文件。
 
 ### Codex `config.toml` 参考配置
 
@@ -31,7 +33,8 @@ approvals_reviewer = "auto_review"
 suppress_unstable_features_warning = true
 web_search = "live"
 service_tier = "default"
-# Codex 0.156.0 及以上版本：先生成模型目录文件，再取消下一行的注释。
+# 可选：Codex 0.160.0+ 会使用上方的远程目录。仅当需要使用由
+# docs/generate-model-catalog.sh 生成的本地完整目录时，才取消下一行注释。
 # model_catalog_json = "model_catalog.json"
 
 [model_providers.copilot_api]
@@ -85,7 +88,7 @@ enabled = false
 
 ### 一键生成 `model_catalog.json`
 
-**Codex `0.156.0+`：** `api_key_model_discovery` 已成功加载模型列表，但 Codex 代码存在 bug，可通过本地模型目录临时规避。使用 API Key 登录时也可使用本地目录；更早版本无需配置 `model_catalog_json`。
+需要完整模型列表、使用 Codex `0.160.0` 之前的版本，或需要避开远程响应的 1 MiB 限制时，使用本地目录文件。生成脚本携带 `x-full-model-catalog: true`，绕过大小和默认模型排除限制，仍遵守 provider 启停状态及 `codexModels` 名单；该 header 不会转发给上游。Provider 名单设置详见[配置说明](configuration.md)。
 
 启动网关，安装 `curl` 及 Bun 或 Node.js，然后在仓库根目录运行[生成脚本](../../generate-model-catalog.sh)：
 
@@ -100,6 +103,8 @@ sh docs/generate-model-catalog.sh
 - **更新：** 网关模型或 provider 变化后，重新运行脚本并重启 Codex。
 
 ### Codex 模型目录与协议适配
+
+模型目录会按客户端版本适配：Codex `0.160.0` 及以上版本使用规范字段 `model_messages.instructions_template`，不再返回重复的旧字段 `base_instructions`；较旧客户端保留兼容字段。
 
 Codex 模型选择界面会展示网关已配置 provider 提供的模型：
 
