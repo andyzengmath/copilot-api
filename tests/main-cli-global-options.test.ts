@@ -36,8 +36,7 @@ const defaultApiHome = fs.mkdtempSync(
 )
 
 const baseEnv = {
-  HOME: process.env.HOME,
-  PATH: process.env.PATH,
+  ...process.env,
   COPILOT_API_HOME: defaultApiHome,
   COPILOT_API_OAUTH_APP: "",
   COPILOT_API_ENTERPRISE_URL: "",
@@ -113,28 +112,4 @@ describe("root-level global CLI options", () => {
       path.join(apiHome, "myapp", "ent_github_token"),
     )
   })
-})
-
-describe("gateway package scripts", () => {
-  for (const script of ["start", "dev"]) {
-    test(`${script} selects the server subcommand without an extra start argument`, async () => {
-      const child = Bun.spawn({
-        cmd: [process.execPath, "run", script, "--help"],
-        cwd,
-        env: baseEnv,
-        stdout: "pipe",
-        stderr: "pipe",
-      })
-      const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
-        child.exited,
-      ])
-
-      expect(exitCode).toBe(0)
-      expect(stderr).not.toContain("Unknown command")
-      expect(stdout + stderr).toContain("--host")
-      expect(stdout + stderr).toContain("--port")
-    })
-  }
 })

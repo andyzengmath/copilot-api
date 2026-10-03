@@ -50,16 +50,16 @@ The project can be run from source in several ways:
 ### Development Mode
 
 ```sh
-bun run dev
+bun run dev start
 ```
 
 ### Production Mode
 
 ```sh
-bun run start
+bun run start start
 ```
 
-> Both scripts select the `start` CLI subcommand automatically. Pass server options directly, for example `bun run start --port 8080`. For other subcommands, use `bun run src/main.ts auth` or `bun run src/main.ts debug`.
+> The trailing `start` is the CLI subcommand passed to `src/main.ts`, not a typo: `bun run dev start` runs watch mode, `bun run start start` runs production.
 
 ## Using with npx
 
