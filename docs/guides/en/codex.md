@@ -68,7 +68,7 @@ enabled = false
 > Set `GITHUB_COPILOT_API_KEY` as a system-level user environment variable so the Codex app can read it too. Use one of the [gateway API keys](cli.md#auth-command-options), or any non-empty placeholder when none are configured; if it is unset, Codex fails with a `Missing environment variable` error.
 
 > [!TIP]
-> The Codex app's effort slider skips Max ([openai/codex#31968](https://github.com/openai/codex/issues/31968)): Extra High is followed by Ultra, which is max reasoning plus automatic delegation to subagents. To pick plain Max in the app, enable it under **Settings → General → Model features → Available reasoning efforts** and choose it from the effort dropdown.
+> The Codex app hides **Max** by default. To use it, select **Max** under **Settings → Configuration → Model features → Available reasoning efforts**. If the effort slider still skips it ([openai/codex#31968](https://github.com/openai/codex/issues/31968)), choose it from the effort dropdown. **Ultra** is not a higher Max: it is max reasoning plus automatic delegation to subagents.
 
 ### Auto Review Model Mapping
 
