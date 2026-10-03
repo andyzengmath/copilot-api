@@ -72,7 +72,7 @@ enabled = false
 > `GITHUB_COPILOT_API_KEY` 需设置为系统级用户环境变量，以便 Codex 应用也能读取。填写任一[网关 API Key](cli.md#auth-命令选项)；未配置 Key 时，填写任意非空占位值即可。未设置时，Codex 会报 `Missing environment variable` 错误。
 
 > [!TIP]
-> Codex 应用默认隐藏 **Max**。如需使用，请在 **Settings → Configuration → Model features → Available reasoning efforts** 中勾选 **Max**。如果推理强度滑块仍跳过 Max（[openai/codex#31968](https://github.com/openai/codex/issues/31968)），请在推理强度下拉菜单中选择。**Ultra** 并非更高一级的 Max，而是最大推理强度加自动任务委派（子代理）。
+> Codex 应用默认隐藏 **Max**。如需使用，请在 **Settings → Configuration → Model features → Available reasoning efforts** 中勾选 **Max**，之后它会出现在推理强度滑块中，位于 Extra High 与 Ultra 之间。**Ultra** 并非更高一级的 Max，而是最大推理强度加自动任务委派（子代理）。
 
 ### 自动审核模型映射
 
