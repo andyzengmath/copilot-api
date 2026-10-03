@@ -69,6 +69,9 @@ enabled = false
 >
 > Set `GITHUB_COPILOT_API_KEY` as a system-level user environment variable so the Codex app can read it too. Use one of the [gateway API keys](cli.md#auth-command-options), or any non-empty placeholder when none are configured; if it is unset, Codex fails with a `Missing environment variable` error.
 
+> [!TIP]
+> The Codex app hides **Max** by default. To use it, select **Max** under **Settings → Configuration → Model features → Available reasoning efforts**. If the effort slider still skips it ([openai/codex#31968](https://github.com/openai/codex/issues/31968)), choose it from the effort dropdown. **Ultra** is not a higher Max: it is max reasoning plus automatic delegation to subagents.
+
 ### Auto Review Model Mapping
 
 When using `approvals_reviewer = "auto_review"` through the top-level GitHub Copilot route, add this mapping to the gateway's `config.json`:
